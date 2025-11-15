@@ -83,6 +83,9 @@ if [ "$WITH_GCC11" = true ]; then
 
     GCC_11_PATH=$(which gcc-11)
     GXX_11_PATH=$(which g++-11)
+else
+    GCC_11_PATH=$(which gcc)
+    GXX_11_PATH=$(which g++)
 fi
 GCC_VERSION=$($GCC_11_PATH -dumpversion | cut -d '.' -f 1)
 
@@ -121,6 +124,47 @@ conda env config vars set TORCH_CUDA_ARCH_LIST=$TORCH_CUDA_ARCH_LIST
 conda deactivate
 conda activate $CONDA_ENV
 
+configure_cuda_toolkit_env() {
+    local cuda_target_dir="$CONDA_PREFIX/targets/x86_64-linux"
+    if [ -d "$cuda_target_dir/include" ]; then
+        local nvvm_bin="${CONDA_PREFIX}/nvvm/bin"
+
+        local new_cpath="${cuda_target_dir}/include"
+        if [ -n "$CPATH" ]; then
+            new_cpath="${new_cpath}:$CPATH"
+        fi
+        local new_lib_path="${cuda_target_dir}/lib:${cuda_target_dir}/lib/stubs"
+        if [ -n "$LIBRARY_PATH" ]; then
+            new_lib_path="${new_lib_path}:$LIBRARY_PATH"
+        fi
+        local new_ld_library_path="${cuda_target_dir}/lib:${cuda_target_dir}/lib/stubs"
+        if [ -d "$nvvm_bin/../lib" ]; then
+            new_ld_library_path="${new_ld_library_path}:$nvvm_bin/../lib"
+        fi
+        if [ -n "$LD_LIBRARY_PATH" ]; then
+            new_ld_library_path="${new_ld_library_path}:$LD_LIBRARY_PATH"
+        fi
+        local new_path="${cuda_target_dir}/bin"
+        if [ -d "$nvvm_bin" ]; then
+            new_path="${nvvm_bin}:${new_path}"
+        fi
+        if [ -n "$PATH" ]; then
+            new_path="${new_path}:$PATH"
+        fi
+
+        echo "Configuring CUDA headers and libraries from ${cuda_target_dir}"
+        conda env config vars set \
+            CUDA_HOME="$cuda_target_dir" \
+            CPATH="$new_cpath" \
+            LIBRARY_PATH="$new_lib_path" \
+            LD_LIBRARY_PATH="$new_ld_library_path" \
+            PATH="$new_path"
+
+        conda deactivate
+        conda activate $CONDA_ENV
+    fi
+}
+
 # Install CUDA and PyTorch dependencies
 # CUDA 11.8 supports until compute capability 9.0
 if [ "$CUDA_VERSION" = "11.8.0" ]; then
@@ -156,12 +200,16 @@ else
     exit 1
 fi
 
+configure_cuda_toolkit_env
+
 # Install OpenGL headers for the playground
 conda install -c conda-forge mesa-libgl-devel-cos7-x86_64 -y 
 
 # Initialize git submodules and install Python requirements
 git submodule update --init --recursive
-pip install -r requirements.txt
+# fused-ssim (pulled from git) expects torch to be importable during its build
+# steps, so we need to disable pip's build isolation to reuse the current env.
+pip install --no-build-isolation -r requirements.txt
 pip install -e .
 
 echo "Setup completed successfully!"

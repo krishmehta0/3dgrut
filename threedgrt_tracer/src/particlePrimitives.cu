@@ -786,9 +786,18 @@ void copyGaussianEnclosingPrimitives(uint32_t gNum,
     const uint32_t blocks  = div_round_up(static_cast<uint32_t>(gNum), threads);
 
     AT_DISPATCH_FLOATING_TYPES_AND_HALF(
-        gPrimVertTs.type(), "copyGaussianEnclosingPrimitives", ([&] { copyGaussianEnclosingPrimitivesKernel<scalar_t><<<blocks, threads, 0, stream>>>(
-                                                                          gNum, gNumVert, gNumTri, gPrimVertTs.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
-                                                                          gPrimTriTs.packed_accessor32<int32_t, 2, torch::RestrictPtrTraits>(), gPrimVrt, gPrimTri); }));
+        static_cast<c10::ScalarType>(gPrimVertTs.scalar_type()),
+        "copyGaussianEnclosingPrimitives",
+        ([&] {
+            copyGaussianEnclosingPrimitivesKernel<scalar_t><<<blocks, threads, 0, stream>>>(
+                gNum,
+                gNumVert,
+                gNumTri,
+                gPrimVertTs.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
+                gPrimTriTs.packed_accessor32<int32_t, 2, torch::RestrictPtrTraits>(),
+                gPrimVrt,
+                gPrimTri);
+        }));
 }
 
 void computeGaussianEnclosingAABB(uint32_t gNum,
@@ -896,12 +905,21 @@ void computeGaussianEnclosingTriBary(uint32_t gNum,
     const uint32_t blocks  = div_round_up(static_cast<uint32_t>(gNum), threads);
 
     AT_DISPATCH_FLOATING_TYPES_AND_HALF(
-        gPos.type(), "computeGaussianEnclosingTriBary", ([&] { computeGaussianEnclosingTriBaryKernel<scalar_t>
-                                                                   <<<blocks, threads, 0, stream>>>(gNum, gPos.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
-                                                                                                    gRot.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
-                                                                                                    gScl.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
-                                                                                                    gDns.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
-                                                                                                    kernelMinResponse, opts, degree, gPrimVrt, gPrimTri); }));
+        static_cast<c10::ScalarType>(gPos.scalar_type()),
+        "computeGaussianEnclosingTriBary",
+        ([&] {
+            computeGaussianEnclosingTriBaryKernel<scalar_t><<<blocks, threads, 0, stream>>>(
+                gNum,
+                gPos.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
+                gRot.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
+                gScl.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
+                gDns.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
+                kernelMinResponse,
+                opts,
+                degree,
+                gPrimVrt,
+                gPrimTri);
+        }));
 }
 
 void generatePinholeCameraRays(int2 resolution, float2 tanFoV, const float4* invViewMatrix, float3* rayOri, float3* rayDir, cudaStream_t stream) {

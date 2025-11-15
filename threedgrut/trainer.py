@@ -22,7 +22,7 @@ import numpy as np
 
 import torch
 import torch.utils.data
-
+from torch.serialization import add_safe_globals
 from addict import Dict
 from omegaconf import DictConfig, OmegaConf
 
@@ -200,7 +200,11 @@ class Trainer3DGRUT:
         # Initialize
         if conf.resume:  # Load a checkpoint
             logger.info(f"🤸 Loading a pretrained checkpoint from {conf.resume}!")
-            checkpoint = torch.load(conf.resume)
+            try:
+                add_safe_globals([np.core.multiarray.scalar])
+            except AttributeError:
+                pass
+            checkpoint = torch.load(conf.resume, weights_only=False)
             model.init_from_checkpoint(checkpoint)
             self.strategy.init_densification_buffer(checkpoint)
             global_step = checkpoint["global_step"]

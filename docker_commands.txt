@@ -1,0 +1,100 @@
+#!/bin/bash
+# Quick reference for building and running the 3DGRUT Docker image
+
+# ----------------------------------------------------------------------
+# Host side (run outside the container)
+# ----------------------------------------------------------------------
+# Build the CUDA 12.8 image from repo root:
+# docker build --build-arg CUDA_VERSION=12.8.1 -t 3dgrut:cuda128 .
+
+# Launch the container (mount this repo; adjust DISPLAY/datasets as needed):
+# docker run --rm -it --gpus=all --net=host --ipc=host \
+#   -e DISPLAY \
+#   -v $PWD:/workspace \
+#   --runtime=nvidia \
+#   3dgrut:cuda128
+
+# ----------------------------------------------------------------------
+# Inside the container
+# ----------------------------------------------------------------------
+
+# Customize these paths for your dataset/run:
+DATA_PATH=${DATA_PATH:-data/examples/office_scene_50}
+RUN_NAME=${RUN_NAME:-office_scene_50}
+CHECKPOINT_PATH=${CHECKPOINT_PATH:-runs/${RUN_NAME}/ckpt_last.pt}
+
+# 1. Trust the mounted repo (once per user)
+git config --global --add safe.directory /workspace
+
+# 2. Optional: clear cached Torch extensions when sources change
+rm -rf /root/.cache/torch_extensions
+
+# 3. Train
+python train.py \
+  --config-name apps/colmap_3dgrt.yaml \
+  path="${DATA_PATH}" \
+  out_dir=runs \
+  experiment_name="${RUN_NAME}" \
+  dataset.downsample_factor=2
+
+# 4. Export a mesh from an existing checkpoint
+python train.py \
+  --config-name apps/colmap_3dgrt.yaml \
+  path="${DATA_PATH}" \
+  resume="${CHECKPOINT_PATH}" \
+  n_iterations=0 \
+  export_ply.enabled=true \
+  export_ply.path="runs/${RUN_NAME}/export_last.ply" \
+  export_ingp.enabled=false \
+  test_last=false
+
+# 5. Playground viewer (optional)
+# python playground.py --gs_object "${CHECKPOINT_PATH}"
+# Build
+
+   docker build --build-arg CUDA_VERSION=12.8.1 -t 3dgrut:cuda128 .
+
+# Start container
+
+   docker run --rm -it --gpus=all --net=host --ipc=host \
+     -e DISPLAY \
+     -v $PWD:/workspace \
+     --runtime=nvidia \
+     3dgrut:cuda128
+
+# Basic workflow inside the container
+
+DATA_PATH=data/...
+RUN_NAME=...
+CHECKPOINT_PATH=runs/$RUN_NAME/ckpt_last.pt (if any)
+
+Then:
+
+# 1. Make sure git trusts the mounted workspace (run once per user)
+git config --global --add safe.directory /workspace
+
+# 2. Optional: clear previous torch extension builds when code changes
+rm -rf /root/.cache/torch_extensions
+
+# 3. Train (uses bundled COLMAP structured input)
+   python train.py \
+     --config-name apps/colmap_3dgrt.yaml \
+     path="$DATA_PATH" \
+     out_dir=runs \
+     experiment_name="$RUN_NAME" \
+     dataset.downsample_factor=2
+
+# 4. Export mesh (after training, or anytime you have a checkpoint):
+   python train.py \
+     --config-name apps/colmap_3dgrt.yaml \
+     path="$DATA_PATH" \
+     resume="$CHECKPOINT_PATH" \
+     n_iterations=0 \
+     export_ply.enabled=true \
+     export_ply.path="runs/${RUN_NAME}/export_last.ply" \
+     export_ingp.enabled=false \
+     test_last=false
+
+# 5. Launch playground viewer (optional)
+# python playground.py --gs_object runs/office_scene_50/office_scene_50-1411_235539/ckpt_last.pt
+

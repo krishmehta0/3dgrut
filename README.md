@@ -103,6 +103,13 @@ chmod +x install_env.sh
 conda activate 3dgrut
 ```
 
+> **Note:** The `requirements.txt` file pulls `fused-ssim` from source. Its build
+> scripts import `torch`, so when running `pip install -r requirements.txt`
+> manually you must reuse the current environment (e.g. `pip install
+> --no-build-isolation -r requirements.txt` or `PIP_NO_BUILD_ISOLATION=1 pip
+> install -r requirements.txt`). The install script already does this for you.
+
+On Windows, you can use the `install_env.ps1` script to install the environment.
 ### Running with Docker
 
 Build the docker image:
@@ -140,7 +147,23 @@ python train.py --config-name apps/colmap_3dgut.yaml path=data/mipnerf360/bonsai
 python train.py --config-name apps/scannetpp_3dgut.yaml path=data/scannetpp/0a5c013435/dslr out_dir=runs experiment_name=0a5c013435_3dgut
 ```
 
-> [!Note] 
+### Quickstart with the bundled COLMAP scene
+
+Need a small, ready-to-train COLMAP dataset? We ship `data/examples/office_scene_50/`
+containing images plus `sparse/0` recon outputs.
+
+```bash
+python train.py \
+  --config-name apps/colmap_3dgrt.yaml \
+  path=data/examples/office_scene_50 \
+  out_dir=runs \
+  experiment_name=office_scene_50 \
+  dataset.downsample_factor=2
+```
+
+Swap the config to `apps/colmap_3dgut.yaml` to test the GUT model, or adjust
+`dataset.downsample_factor` for higher/lower resolution. The command assumes the
+repo root is mounted at `/workspace` inside Docker as shown earlier.
 > For ScanNet++, we expect the dataset to be preprocessed following [FisheyeGS](https://github.com/zmliao/Fisheye-GS?tab=readme-ov-file#prepare-training-data-on-scannet-dataset)'s method.
 
 > [!Note]  

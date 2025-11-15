@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import os
+import sys
 import torch
 import torch.utils.cpp_extension
 
@@ -23,7 +24,7 @@ import torch.utils.cpp_extension
 def setup_3dgrt(conf):
     include_paths = []
 
-    # Make sure we can find the necessary compiler and libary binaries.
+    # Make sure we can find the necessary compiler and library binaries.
     if os.name == "nt":
         include_paths.append(os.path.dirname(__file__) + r"\include")
         include_paths.append(os.path.dirname(__file__) + r"\dependencies\optix-dev\include")
@@ -66,6 +67,33 @@ def setup_3dgrt(conf):
     # Linker options.
     if os.name == "posix":
         ldflags = ["-lcuda", "-lnvrtc"]
+        extra_lib_dirs = []
+
+        cuda_home = os.environ.get("CUDA_HOME")
+        if cuda_home:
+            candidates = [
+                os.path.join(cuda_home, "lib"),
+                os.path.join(cuda_home, "lib64"),
+                os.path.join(cuda_home, "lib", "stubs"),
+                os.path.join(cuda_home, "lib64", "stubs"),
+            ]
+            for candidate in candidates:
+                if os.path.isdir(candidate):
+                    extra_lib_dirs.append(candidate)
+
+        conda_prefix = os.environ.get("CONDA_PREFIX")
+        if conda_prefix:
+            conda_candidates = [
+                os.path.join(conda_prefix, "lib"),
+                os.path.join(conda_prefix, "lib64"),
+                os.path.join(conda_prefix, "lib", "stubs"),
+                os.path.join(conda_prefix, "lib64", "stubs"),
+            ]
+            for candidate in conda_candidates:
+                if os.path.isdir(candidate):
+                    extra_lib_dirs.append(candidate)
+
+        ldflags += [f"-L{path}" for path in extra_lib_dirs]
     elif os.name == "nt":
         ldflags = ["cuda.lib", "advapi32.lib", "nvrtc.lib"]
 
@@ -92,7 +120,7 @@ def setup_3dgrt(conf):
             "-target", "cuda",
             "-I", slang_build_inc_dir,
             "-line-directive-mode", "none",
-            "-matrix-layout-row-major", # NB : this is required for cuda target
+            "-matrix-layout-row-major",  # NB : this is required for cuda target
             "-O2",
             f"-DPARTICLE_RADIANCE_NUM_COEFFS={(conf.render.particle_radiance_sph_degree + 1) ** 2}",
             f"-DGAUSSIAN_PARTICLE_KERNEL_DEGREE={conf.render.particle_kernel_degree}",
@@ -113,9 +141,11 @@ def setup_3dgrt(conf):
         use_cugl_interop = False
         try:
             import polyscope
+
             use_cugl_interop = True   # polyscope installed, possibly without cupy / cuda-python available
             import cupy
             import cuda
+
             use_cugl_interop = False  # polyscope has access to preset bindings from cupy / cuda-python
         except ImportError:
             use_cugl_interop = False  # polyscope not installed or polyscope installed + cupy / cuda-python available
@@ -125,7 +155,7 @@ def setup_3dgrt(conf):
 
     # Compile and load.
     source_paths = [os.path.join(os.path.dirname(__file__), fn) for fn in source_files]
-    torch.utils.cpp_extension.load(
+    module = torch.utils.cpp_extension.load(
         name="lib3dgrt_cc",
         sources=source_paths,
         extra_cflags=cc_flags,
@@ -135,3 +165,5 @@ def setup_3dgrt(conf):
         with_cuda=True,
         verbose=True,
     )
+    sys.modules["lib3dgrt_cc"] = module
+    sys.modules["threedgrt_tracer.lib3dgrt_cc"] = module
